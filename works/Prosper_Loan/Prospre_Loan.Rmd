@@ -1,0 +1,414 @@
+---
+Prosper借贷数据分析
+---
+###Prosper是美国的一家P2P（个人对个人）在线借贷平台网站，本案例试图从EDA分析角度出发，分析Propser数据集中贷款人条件及贷款利率等问题。
+```{r}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
+```
+
+```{r}
+library('knitr')
+library('ggplot2')
+library('dplyr')
+library('gridExtra')
+```
+
+```{r}
+getwd()
+```
+
+```{r}
+#加载数据集
+prosper <- read.csv('prosperLoanData.csv')
+```
+```{r}
+dim(prosper)
+```
+```{r}
+str(prosper)
+```
+#### 该数据集有113937个观测值，81个变量。本此分析选取以下10个变量来探索贷款人条件和贷款利率等问题。变量如下：
+#### BorrowerRate：借款人的贷款利率，影响着借贷双方经济利益，为本次分析的重要指标
+#### Occupation:借款人的职业
+#### Term:贷款期限（月）
+#### EmploymentStatus：借款人就业状态
+#### BorrowerState：借款人所在地址，采用2个字母缩写
+#### ListingCategory：贷款类型，共21种状态
+#### IncomeRange：借款人的收入范围
+#### CreditGrade/ProsperRating..Alpha.：借款人评级，区别是前者为09年7月之前，后者为09年7月之后
+#### CreditScore: 借款人评分，由信用评分计算均值获得
+#### LenderYield：贷款人收益
+
+
+## 单变量分析
+### 贷款利率
+```{r}
+ggplot(aes(BorrowerRate),data = prosper) + 
+  geom_histogram() +
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Borrower Rate')
+```
+
+#### 贷款利率集中分布在0.15-0.2之间，接近正太分布。
+### 借款人职业
+```{r}
+ggplot(aes(Occupation),data = prosper) + 
+  geom_bar() +
+  theme(axis.text.x=element_text(angle = 90,hjust = 1,vjust=0,size=7),
+        plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Occupation')
+```
+
+#### 从职业数量上看，最多的的other，其次是Professional。
+
+### 贷款期限
+```{r}
+#将Term数据类型改为factor
+prosper$Term<-as.factor(prosper$Term)
+summary(prosper$Term)
+```
+
+```{r}
+ggplot(aes(Term),data = prosper) + 
+  geom_bar() +
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Term')
+```
+
+#### 大部分人的贷款期限都是36个月，人数差不多9万人；而贷款期限12个月的人数非常少。
+
+### 就业情况
+```{r}
+ggplot(aes(EmploymentStatus),data = prosper) + 
+  geom_bar() +
+  theme(axis.text.x=element_text(angle = 90,hjust = 1,vjust=0,size=7),
+        plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of EmploymentStatus')
+
+```
+
+#### 大部分借款人的是在职人员，说明在职人员更容易贷到款。
+
+### 借款人所在地理位置
+```{r}
+ggplot(aes(BorrowerState),data = prosper) + 
+  geom_bar() +
+  theme(axis.text.x=element_text(angle = 90,hjust = 1,vjust=0,size=7),
+        plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Borrower State')
+
+```
+
+#### CA地区（加利福尼亚）拥有最多借款人数，应该是该地区受金融危机影响比较大，导致借款人明显高于第二多的地区。
+
+### 贷款用途
+```{r}
+ggplot(aes(ListingCategory..numeric.),data = prosper) + 
+  geom_bar() +
+  scale_x_continuous(breaks=seq(0,21,1))+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Category')
+
+```
+
+#### 除去0是暂无分类，最多的用途是1债务合并。
+
+### 借款人收入范围
+```{r}
+summary(prosper$IncomeRange)
+```
+
+```{r}
+prosper$IncomeRange <- factor(prosper$IncomeRange, levels=c('$0', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+', 'Not employed','NA', ordered = TRUE))
+```
+```{r}
+ggplot(aes(IncomeRange),data = prosper) + 
+  geom_bar() +
+  theme(axis.text.x=element_text(angle = 90,hjust = 1,vjust=0,size=7),
+        plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Income Range')
+
+```
+
+#### 多数人的收入范围集中在$25,000-74,999的范围之间。
+
+### 借款人信用评级
+```{r}
+#将贷款时间变更为Date格式，变更贷款评级数据类型为factor并排序
+prosper$LoanOriginationDate <- as.Date(prosper$LoanOriginationDate)
+
+prosper$CreditGrade <- factor(
+  prosper$CreditGrade, levels=c("HR","E","D","C","B","A","AA"), ordered=TRUE)
+prosper$ProsperRating..Alpha. <- factor(
+  prosper$ProsperRating..Alpha., 
+  levels=c("HR","E","D","C","B","A","AA"), ordered=TRUE)
+
+p1<-ggplot(aes(x=CreditGrade),
+           data=subset(prosper,LoanOriginationDate < "2009-07-01"))+
+  geom_bar()+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Grade before 2009-07')
+
+p2<-ggplot(aes(x=ProsperRating..Alpha.),
+           data=subset(prosper,LoanOriginationDate > "2009-07-01"))+
+  geom_bar()+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Grade after 2009-07')
+
+grid.arrange(p1,p2)
+
+```
+
+#### 2009年7月之前的信用评分总体上看分布较平均，而2009年7月之后的信用评分的借款人分布微正态分布，即信用等级极高或者极低的借款人数量都很少。
+
+### 信用评分
+```{r}
+#根据贷款评分上下限计算平均值得出贷款评分数据
+prosper$CreditScore<-(prosper$CreditScoreRangeUpper+prosper$CreditScoreRangeLower)/2
+#因为数据中包含一些值为0的数据，可视化时将其删除
+ggplot(aes(CreditScore),data=prosper)+
+  geom_bar(binwidth = 10)+
+  xlim(400,850)+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Credit Score')
+
+```
+
+#### 信用评分的用户多数集中在650-750之间，近似正态分布。
+
+### 贷款人收益率
+```{r}
+ggplot(aes(LenderYield),data=prosper)+
+  geom_histogram(binwidth = 0.005)+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Count of Lender Yield')
+
+```
+
+#### 贷款人收益率的分布在0.31处有一个最大的数值。收益率分布并非是正态分布的。
+
+## 单变量分析
+### 数据集的结构是什么？
+#### 该数据集有113937个观测值，81个变量。
+### 数据集中的主要功能是什么？
+#### 根据借款人的条件以及贷款利率等探索。
+### 你认为数据集内哪些其他特征可以帮助你探索兴趣特点？
+#### 由于数据集总体变量很多，我选取了其中10项与借款人可能存在联系的特征，并且新增加了一列CreditScore计算信用评分。我认为其中BorrowerRate、Term、IncomeRange、CreditGrade、ProsperRating、CreditScore可能会影响贷款利率，可以做进一步分析。
+### 您是否从数据集中的现有变量创建了任何新变量？
+#### 根据信用评分的上下限CreditScoreRangeUpper、CreditScoreRangeLower求取平均值CreditScore作为信用评分变量，用来探讨信用评分与贷款利率的关系。
+### 在已经探究的特性中，是否存在任何异常分布？你是否对数据进行一些操作，如清洁、调整或改变数据的形式？如果是，你为什么会这样做？
+#### 1.因为贷款期限数据只有3种情况，所以将数据类型由int改为Factor；
+#### 2.对收入范围进行从低到高排序，合理反映各收入范围的数量；
+#### 3.由于数据集中借款人的评级以2009-07时间为截点，分为两部分子集进行可视化。
+#### 4.合伙投资贷款金额中含有大量值为0，导致其他数据无法显示，将此部分剔除后查看参与投资贷款的金额情况。
+
+##双变量绘图
+```{r}
+#选取BorrowerRate、Term、IncomeRange、CreditGrade、ProsperRating、CreditScore、LenderYield、LoanOriginationDate列做进一步分析
+keepvars<-c("BorrowerRate","Term","IncomeRange","CreditGrade",
+            "ProsperRating..Alpha.","CreditScore","LenderYield",
+            "LoanOriginationDate")
+
+prosper_sub <- prosper[keepvars]
+
+```
+
+### 贷款利率与期限
+```{r}
+ggplot(aes(x=Term,y=BorrowerRate),data=prosper_sub)+
+  geom_boxplot()+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Term vs BorrowerRate')
+
+```
+
+#### 12个月的贷款期限的贷款利率较低，但期限与贷款利率的线性关系不明显。
+
+### 贷款利率与收入
+```{r}
+ggplot(aes(x=IncomeRange,y=BorrowerRate),data=prosper_sub)+
+  geom_boxplot()+
+  theme(axis.text.x=element_text(angle = 90,hjust = 1,vjust=0,size=15),
+        plot.title = element_text(hjust=0.5))+
+  ggtitle('IncomeRange vs BorrowerRate')
+
+```
+
+#### 除去NA的情况外，$0的贷款利率没有$1-24,999的贷款利率高，收入范围、贷款利率之间关系不显著，而失业的情况下，贷款利率最高。
+
+### 贷款利率与评级
+```{r}
+#划分子集，筛选按照09年7月之前的数据并移除缺失值
+ggplot(aes(x=CreditGrade,y=BorrowerRate),
+       data=subset(prosper_sub,
+                   LoanOriginationDate < "2009-07-01" & !is.na(CreditGrade)))+
+  geom_boxplot()+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Grade before 2009-07 vs BorrowerRate')
+
+```
+
+```{r}
+#划分子集，筛选按照09年7月之后的数据并移除缺失值
+ggplot(aes(x=ProsperRating..Alpha.,y=BorrowerRate),
+       data=subset(prosper_sub,
+                   LoanOriginationDate > "2009-07-01" & !is.na(ProsperRating..Alpha.)))+
+  geom_boxplot()+
+  ylim(0,0.5)+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Grade after 2009-07 vs BorrowerRate')
+
+```
+
+#### 从贷款利率和借款人评级的关系图种可以明显发现借款人评级越高，贷款利率越低。
+
+### 贷款利率与评分
+```{r}
+#增加抖动，添加一条贷款利率平均值曲线
+ggplot(aes(x=CreditScore,y=BorrowerRate),data=prosper_sub)+
+  geom_point(alpha=1/100,color='orange')+
+  xlim(400,850)+
+  geom_line(stat='summary',fun.y=mean,color='red')+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Credit Score vs BorrowerRate')
+
+```
+
+#### 从利率的均值线可以看出，评分越高，贷款利率越低。
+
+### 贷款利率与贷款人收益
+```{r}
+ggplot(aes(x=LenderYield,y=BorrowerRate),data=prosper_sub)+
+  geom_point(alpha=1/20,color='blue')+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Lender Yield vs BorrowerRate')
+
+```
+
+#### 贷款人收益与贷款利率呈明显正相关，显然这与P2P的交易模式有关。
+
+```{r}
+cor.test(prosper_sub$LenderYield,prosper_sub$BorrowerRate)$estimate
+```
+#### 查看了贷款人收益和贷款利率的相关度是0.999以上，非常高，符合常理。
+
+## 双变量分析
+### 探讨你在这部分探究中观察到的一些关系。这些感兴趣的特性与数据集内其他特性有什么区别？
+#### 贷款利率与贷款周期Term、IncomeRange借款人收入的关系不明显。
+### 你是否观察到主要特性与其他特性之间的有趣关系？
+#### 2009年7月以前和2009年7月以后，评级和利率的负相关趋势变得更明显了，应该是Prosper有调正过评级模型。
+### 你发现最强的关系是什么？
+#### 贷款人收益和贷款利率强相关，相关度在0.999以上。
+
+## 多变量绘图
+### 贷款利率vs信用评分vs收入
+```{r}
+ggplot(aes(x=CreditScore,y=BorrowerRate,color=IncomeRange),
+       data=subset(prosper_sub,LoanOriginationDate < "2009-07-01" & !is.na(IncomeRange)))+
+  geom_jitter()+
+  scale_color_brewer(type = 'seq',
+                     guide = guide_legend(title = 'IncomeRange'))+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('Before 2009-07')
+
+```
+
+```{r}
+ggplot(aes(x=CreditScore,y=BorrowerRate,color=IncomeRange),
+       data=subset(prosper_sub,LoanOriginationDate > "2009-07-01" & !is.na(IncomeRange)))+
+  geom_jitter()+
+  ylim(0,0.5)+
+  scale_color_brewer(type = 'seq',
+                     guide = guide_legend(title = 'IncomeRange'))+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('After 2009-07')
+
+```
+
+#### 2009年7月之后，信用评分在600分以上，而2009年9月以前，信用评分区间范围更大，从两幅图中观察到，贷款利率、信用评分与收入大小关系不明显。
+
+### 贷款利率vs信用评分vs信用评级
+```{r}
+ggplot(aes(x=CreditScore,y=BorrowerRate,color=CreditGrade),
+       data=subset(prosper_sub,
+                   LoanOriginationDate < "2009-07-01" & !is.na(CreditGrade)))+
+  geom_jitter(size=1.2)+
+  xlim(400,850)+
+  scale_color_brewer(type = 'div',palette = 'Spetral')+
+  theme(plot.title = element_text(hjust=0.5))
+  ggtitle('Before 2009-07')
+```
+
+```{r}
+ggplot(aes(x=CreditScore,y=BorrowerRate,color=ProsperRating..Alpha.),
+       data=subset(prosper_sub,
+                   LoanOriginationDate > "2009-07-01" & !is.na(ProsperRating..Alpha.)))+
+  geom_jitter(size=1.2)+
+  ylim(0,0.5)+
+  scale_color_brewer(type = 'div',palette = 'Spetral')+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('After 2009-07')
+```
+
+#### 2009年7月之前，评分和评级是相关的，即评级越高，评分也越高；2009年7月之后，评级与贷款利率相关，即评级越高，利率越低，与评分的关系不大。
+
+### 贷款利率vs收入范围vs信用评级vs信用评分
+```{r}
+ggplot(aes(x=CreditScore,y=BorrowerRate,color=CreditGrade),
+       data=subset(prosper_sub,
+                   LoanOriginationDate < "2009-07-01" & !is.na(CreditGrade) & !is.na(IncomeRange)))+
+  geom_jitter(size=0.8)+
+  geom_line(stat='summary',fun.y=mean,color='red')+
+  xlim(400,850)+
+  facet_wrap(~IncomeRange)+
+  scale_color_brewer(type = 'div',palette = 'Spetral')+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle("Before 2009-07")
+
+```
+
+```{r}
+ggplot(aes(x=CreditScore,y=BorrowerRate,color=ProsperRating..Alpha.),
+       data=subset(prosper_sub,
+                   LoanOriginationDate > "2009-07-01" & !is.na(ProsperRating..Alpha.) & !is.na(IncomeRange)))+
+  geom_jitter(size=0.5)+
+  geom_line(stat='summary',fun.y=mean,color='red')+
+  ylim(0,0.5)+
+  facet_wrap(~IncomeRange)+
+  scale_color_brewer(type = 'div',palette = 'Spetral')+
+  theme(plot.title = element_text(hjust=0.5))+
+  ggtitle('After 2009-07')
+```
+
+
+#### 首先，无论2009-07之前还是之后，借款人收入对贷款利率的影响不大。其二，2009-07以前，信用评级与信用评分相关度高，而这两者与贷款利率的关系都不显著。其三，2009-07以后，信用评级与贷款利率相关度很高，此时信用评级与评分相关度不大。说明2009-07以后用了新了评级系统，且与贷款利率高度挂钩。
+
+##多变量分析
+### 探讨你在这部分探究中观察到的一些关系。通过观察感兴趣的特性，是否存在相互促进的特性？
+#### 2009-07以前，信用评分与信用评级相关度高，但信用评分与信用评级对贷款利率的影响不明显；2009-07以后，贷款利率与信用评级高度相关，即评级越高，贷款利率越低，贷款利率与信用评分无关。
+### 这些特性之间是否存在有趣或惊人的联系呢？
+#### 收入范围与贷款利率的关系并不大。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
